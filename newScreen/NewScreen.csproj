@@ -14,7 +14,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>NewScreen</AssemblyName>
     <RootNamespace>NewScreen</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>NewScreen</Product>
     <Company>ScreenEditor</Company>
     <Description>노트 캡처 감지기 최소 테스트</Description>

@@ -210,6 +210,18 @@ osu!의 `HitObject.StartTime`이 곧 "판정선에서 쳐야 하는 시각"이�
 
 # 배포 이력
 
+## 1.2.0 (2026-08-23)
+- **osz 자동 생성 기능 추가**: 캡처 종료 시 대상 창(프로세스) 오디오를 WASAPI 프로세스 루프백으로
+  녹음해서 events.log와 합쳐 osu! mania 6키 `.osz`를 자동으로 만든다(체크박스 옵션, 기본 꺼짐).
+  `%APPDATA%\NewScreen\screenLog\capture_{시각}.osz`에 저장되며, raw/events 로그와 달리 지워지지
+  않고 계속 누적 보관된다. "osz에서 사이드 배제(4K)" 옵션도 추가 — 감지/전송은 그대로 두고 osz
+  생성 시에만 사이드노트를 빼고 4키(CircleSize=4)로 만들 수 있다.
+- **버그 수정 — 사이드-일반노트가 붙어 나올 때 하나로 뭉개지던 문제**: `NoteTracker.FindRuns()`의
+  배경 간격 병합(`MaxRunMergeGapPx`)이 색상을 구분하지 않아서, 사이드노트와 일반노트가 몇 px
+  이내로 붙어 나오면 두 노트가 하나의 run으로 합쳐지고 다수결로 한쪽이 통째로 사라졌다. 실기
+  raw 로그로 재현 확인 후, 다수결 색상이 같은 run끼리만 병합하도록 수정.
+- 산출물: `installer\Output\NewScreen-Setup-1.2.0.exe`.
+
 ## 1.1.0 (2026-08-22)
 - **로그 경로를 `%APPDATA%\NewScreen\screenLog`로 변경**(기존 `C:\dev\ScreenEditor\newScreen\screenLog` 하드코딩
   경로는 Inno로 설치한 일반 사용자 환경에서 쓰기 권한이 보장되지 않음).
