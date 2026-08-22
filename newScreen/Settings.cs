@@ -74,6 +74,18 @@ public class Settings
     /// <summary>캡처한 노트를 osu!(패턴 복제 모드)로 실시간 전송할지. 전역 속도가 있어야 동작한다.</summary>
     public bool SendNotesToOsu { get; set; } = true;
 
+    /// <summary>
+    /// 캡처 종료 시 <c>events.log</c> + 대상 창 오디오로 osu! mania 6키 <c>.osz</c>를 자동 생성할지.
+    /// 캘리브레이션 전용 캡처(events.log가 안 남는 모드)에서는 체크 여부와 무관하게 항상 건너뛴다.
+    /// </summary>
+    public bool GenerateOsz { get; set; } = false;
+
+    /// <summary>
+    /// true면 사이드노트 감지·전송은 평소대로 하되, osz를 만들 때만 SIDE 이벤트를 빼고 4키
+    /// (CircleSize=4) 맵으로 만든다.
+    /// </summary>
+    public bool ExcludeSideNotesFromOsz { get; set; } = false;
+
     public bool AlwaysOnTop { get; set; } = true;
 
     // 버튼별 전역 단축키 (액션 id → 키). 기본값 없음 = 전부 빈칸.

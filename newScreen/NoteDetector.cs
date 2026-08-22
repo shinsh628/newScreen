@@ -45,6 +45,8 @@ public sealed class NoteDetector : IDisposable
     readonly bool _calibrationOnly;
     readonly double _calibratedVelocity;
     readonly NoteSender? _sender;
+    readonly bool _generateOsz;
+    readonly bool _excludeSideNotes;
     Thread? _thread;
     volatile bool _running;
 
@@ -53,6 +55,12 @@ public sealed class NoteDetector : IDisposable
 
     /// <summary>캡처를 시작조차 못했을 때 발생 (백그라운드 스레드 호출 — UI는 BeginInvoke 필요).</summary>
     public event Action<string>? Failed;
+
+    /// <summary>
+    /// osz 자동 생성이 실패했을 때 발생 (백그라운드 스레드 호출 — UI는 BeginInvoke 필요).
+    /// 노트 감지/전송 자체는 이 실패와 무관하게 계속 정상 동작한다.
+    /// </summary>
+    public event Action<string>? OszFailed;
 
     /// <summary>
     /// 캘리브레이션 모드에서 노트 하나의 속도가 측정될 때마다 발생 (백그라운드 스레드 호출).
@@ -77,8 +85,17 @@ public sealed class NoteDetector : IDisposable
     /// <b>전역 속도(캘리브레이션)가 있어야 동작한다</b> — 처음 감지한 순간에는 그 노트의 속도를 잴
     /// 표본이 아직 없어서 판정선 도달 시각을 계산할 수 없기 때문이다.
     /// </param>
+    /// <param name="generateOsz">
+    /// true면 캡처 시작~종료 구간의 대상 창 오디오를 녹음해 두었다가, 종료 시 events.log와 함께
+    /// osu! mania 6키 <c>.osz</c>를 만든다. 캘리브레이션 모드에서는 무시된다.
+    /// </param>
+    /// <param name="excludeSideNotes">
+    /// true면 감지 자체는 그대로 하되(사이드도 평소처럼 인식), osz를 만들 때만 SIDE 이벤트를 빼고
+    /// 4키(CircleSize=4) 맵으로 만든다.
+    /// </param>
     public NoteDetector(IntPtr targetHwnd, int[] columnXs, int judgementLineY,
-                        double calibratedVelocity = 0, bool calibrationOnly = false, NoteSender? sender = null)
+                        double calibratedVelocity = 0, bool calibrationOnly = false, NoteSender? sender = null,
+                        bool generateOsz = false, bool excludeSideNotes = false)
     {
         if (columnXs.Length != LaneCount) throw new ArgumentException($"columnXs must have {LaneCount} entries");
         _targetHwnd = targetHwnd;
@@ -87,6 +104,8 @@ public sealed class NoteDetector : IDisposable
         _calibratedVelocity = calibratedVelocity;
         _calibrationOnly = calibrationOnly;
         _sender = calibrationOnly ? null : sender;
+        _generateOsz = generateOsz;
+        _excludeSideNotes = excludeSideNotes;
     }
 
     public void Start()
@@ -129,15 +148,17 @@ public sealed class NoteDetector : IDisposable
     void CaptureLoopCore()
     {
         var startTime = DateTime.Now;
+        string tag = startTime.ToString("yyyy-MM-dd_HH-mm-ss");
+        string? oszOutputPath = null;
 
         // 캘리브레이션은 속도만 재는 모드라 로그 파일을 아예 만들지 않는다 — 패턴을 기록하지 않는다.
         if (!_calibrationOnly)
         {
             Directory.CreateDirectory(LogDir);
             DeleteOldLogs();
-            string tag = startTime.ToString("yyyy-MM-dd_HH-mm-ss");
             RawLogFilePath = Path.Combine(LogDir, $"capture_{tag}_raw.log");
             EventsLogFilePath = Path.Combine(LogDir, $"capture_{tag}_events.log");
+            oszOutputPath = Path.Combine(LogDir, $"capture_{tag}.osz");
         }
 
         // 4레인을 각각 따로 캡처하면 순서대로(0→1→2→3) 캡처하는 동안 실제 시각이 벌어지는데도
@@ -182,6 +203,24 @@ public sealed class NoteDetector : IDisposable
 
             trackers[i].NoteReady += _sender.Queue;
             trackers[i].NoteLengthKnown += _sender.SendLength;
+        }
+
+        // 오디오 녹음은 events.log의 hitMs와 동일한 t=0(스톱워치 시작 직전)에 맞춰 시작한다.
+        // 그래야 나중에 osz를 만들 때 hitMs를 그대로 오디오 타임라인의 시각으로 써도 어긋나지 않는다.
+        ProcessAudioRecorder? audioRecorder = null;
+        if (_generateOsz && !_calibrationOnly)
+        {
+            try
+            {
+                Native.GetWindowThreadProcessId(_targetHwnd, out uint pid);
+                audioRecorder = new ProcessAudioRecorder(pid);
+                audioRecorder.Start();
+            }
+            catch (Exception ex)
+            {
+                audioRecorder = null;
+                OszFailed?.Invoke($"오디오 녹음을 시작하지 못해 osz를 만들 수 없습니다: {ex.Message}");
+            }
         }
 
         var sw = Stopwatch.StartNew();
@@ -261,6 +300,30 @@ public sealed class NoteDetector : IDisposable
         _sender?.End();
         rawLog?.Flush();
         evLog?.Flush();
+
+        // osz 빌더가 이 파일을 다시 열어 읽어야 하므로, 여기서 명시적으로 닫는다 — 메서드 끝의
+        // `using`이 닫아줄 때까지 기다리면 그 사이에 OszBuilder가 "다른 프로세스가 쓰고 있다"며 실패한다
+        // (같은 프로세스 안에서도 아직 열려 있는 핸들과는 공유 모드가 안 맞을 수 있음, 실기에서 확인됨).
+        rawLog?.Dispose();
+        evLog?.Dispose();
+
+        if (audioRecorder != null)
+        {
+            try
+            {
+                byte[]? wav = audioRecorder.Stop();
+                if (wav != null && wav.Length > 0 && EventsLogFilePath != null && oszOutputPath != null)
+                    OszBuilder.Build(EventsLogFilePath, wav, startTime, oszOutputPath, _excludeSideNotes);
+            }
+            catch (Exception ex)
+            {
+                OszFailed?.Invoke($"osz 생성에 실패했습니다: {ex.Message}");
+            }
+            finally
+            {
+                audioRecorder.Dispose();
+            }
+        }
     }
 
     /// <summary>다음 틱까지 대기 (Stopwatch 기준으로 드리프트 누적 방지).</summary>

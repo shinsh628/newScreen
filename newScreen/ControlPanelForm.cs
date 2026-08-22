@@ -58,7 +58,7 @@ public class ControlPanelForm : Form
         MaximizeBox = false;
         ShowInTaskbar = true;
         KeyPreview = true;
-        ClientSize = new Size(260, 625);
+        ClientSize = new Size(260, 677);
 
         var wa = Screen.PrimaryScreen!.WorkingArea;
         Location = new Point(wa.Right - ClientSize.Width - 16, wa.Top + 16);
@@ -123,6 +123,16 @@ public class ControlPanelForm : Form
             if (chkOverlay.Checked) StartOverlay();
             else StopOverlay();
         };
+
+        var chkOsz = new CheckBox { Text = "캡처 종료 시 osz 자동 생성", Checked = _settings.GenerateOsz };
+        chkOsz.SetBounds(12, y, 236, 24); y += 26;
+        Controls.Add(chkOsz);
+        chkOsz.CheckedChanged += (_, _) => _settings.GenerateOsz = chkOsz.Checked;
+
+        var chkExcludeSide = new CheckBox { Text = "osz에서 사이드 배제(4K)", Checked = _settings.ExcludeSideNotesFromOsz };
+        chkExcludeSide.SetBounds(12, y, 236, 24); y += 26;
+        Controls.Add(chkExcludeSide);
+        chkExcludeSide.CheckedChanged += (_, _) => _settings.ExcludeSideNotesFromOsz = chkExcludeSide.Checked;
 
         // 오버레이 불투명도 — 낮추면 아래의 대상 게임이 비쳐 보인다(두 화면 겹쳐 보기용).
         var lblOpacity = new Label { TextAlign = ContentAlignment.MiddleLeft };
@@ -485,9 +495,12 @@ public class ControlPanelForm : Form
         }
 
         _detector = new NoteDetector(target, _settings.ClientColumnXs, _settings.ClientJudgementLineY,
-                                     _settings.CalibratedVelocityPxPerMs, sender: _sender);
+                                     _settings.CalibratedVelocityPxPerMs, sender: _sender,
+                                     generateOsz: _settings.GenerateOsz,
+                                     excludeSideNotes: _settings.ExcludeSideNotesFromOsz);
         _detector.LaneStateChanged += OnLaneStateChanged;
         _detector.Failed += OnCaptureFailed;
+        _detector.OszFailed += OnOszFailed;
         _detector.Start();
         for (int lane = 0; lane < Settings.LaneCount; lane++) SetStatus(lane, false);
 
@@ -539,6 +552,7 @@ public class ControlPanelForm : Form
         if (_detector == null) return;
         _detector.LaneStateChanged -= OnLaneStateChanged;
         _detector.Failed -= OnCaptureFailed;
+        _detector.OszFailed -= OnOszFailed;
         _detector.VelocityMeasured -= OnVelocityMeasured;
         _detector.Dispose();
         _detector = null;
@@ -560,6 +574,14 @@ public class ControlPanelForm : Form
         StopCapture();
         UpdateLabels();
         MessageBox.Show(this, $"캡처를 시작하지 못했습니다.\n\n{message}", "NewScreen");
+    }
+
+    void OnOszFailed(string message)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired) { BeginInvoke(new Action<string>(OnOszFailed), message); return; }
+
+        MessageBox.Show(this, message, "NewScreen — osz 생성 실패");
     }
 
     void OnLaneStateChanged(int lane, bool detected)
