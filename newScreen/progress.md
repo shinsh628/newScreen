@@ -205,3 +205,49 @@ osu!의 `HitObject.StartTime`이 곧 "판정선에서 쳐야 하는 시각"이�
   스크롤이 빠른 곡에서 부족해질 수 있다. 부족하면 늦게 도착한 노트가 조용히 버려진다(강제 미스 방지).
 - **오버레이 반투명 시 DWM 썸네일 동작 미확인** — 100% 미만이면 창이 레이어드가 되는데
   그 상태에서 썸네일이 제대로 합성되는지는 확인이 필요하다.
+
+---
+
+# 배포 이력
+
+## 1.1.0 (2026-08-22)
+- **로그 경로를 `%APPDATA%\NewScreen\screenLog`로 변경**(기존 `C:\dev\ScreenEditor\newScreen\screenLog` 하드코딩
+  경로는 Inno로 설치한 일반 사용자 환경에서 쓰기 권한이 보장되지 않음).
+- **로그 보존을 최근 (raw,events) 한 쌍만으로 제한**: 캡처 시작 시 `DeleteOldLogs()`가 기존
+  `capture_*_*.log`를 전부 지운 뒤 새 쌍을 만든다(무한정 쌓여 `%appdata%`가 커지는 것 방지).
+  캘리브레이션 모드는 애초에 로그를 안 남기므로 영향 없음.
+- 산출물: `installer\Output\NewScreen-Setup-1.1.0.exe`.
+
+## 1.0.0 (2026-08-21 이전)
+- 최초 배포. `installer\NewScreen.iss` + `installer\build-installer.ps1`.
+
+---
+
+# 저장소
+
+- **2026-08-22**: `C:\dev\ScreenEditor`(ScreenEditor + newScreen 전체) 기준으로 git 저장소 생성,
+  GitHub `https://github.com/shinsh628/newScreen.git`의 `main` 브랜치에 최초 커밋 push.
+  `bin/obj/publish/installer\Output/screenLog`는 `.gitignore`로 제외(빌드 산출물·실행 중 생성 파일).
+
+---
+
+# 개발 이어가기 — 최소 준비물
+
+새 PC(예: 방금 포맷한 Windows 11)에서 이 프로젝트 개발을 이어가려면:
+
+1. **Windows 11** — 빌드 타깃이 `net8.0-windows10.0.22000.0`(WGC 노란 캡처 테두리를 끄는
+   `IsBorderRequired`가 22000부터 있음). 실행 최소 요구는 Windows 10 2004(19041)이지만 개발 자체는
+   Win11 권장.
+2. **.NET 8 SDK** — `winget install Microsoft.DotNet.SDK.8` 또는 공식 인스톨러. (`dotnet --version`으로 확인.)
+3. **Windows 10/11 SDK 10.0.22000.0 이상** — `Windows.Graphics.Capture`(WinRT) 프로젝션 참조에 필요.
+   Visual Studio 설치 시 ".NET 데스크톱 개발" 워크로드에 포함해서 받거나 단독 SDK 설치.
+4. **에디터** — Visual Studio 2022(WinForms 지원) 또는 VS Code + C# 확장. `dotnet build`만으로도 빌드 가능.
+5. **NuGet 패키지 복원용 인터넷 연결** — `Vortice.Direct3D11` 등 최초 1회 다운로드 필요(이후 캐시됨).
+6. **Inno Setup 6** — 설치 프로그램(.exe) 빌드할 때만 필요. `installer\build-installer.ps1`이
+   `C:\Users\shins\AppData\Local\Programs\Inno Setup 6\ISCC.exe` 경로를 하드코딩하므로, 새 PC에서는
+   그 경로에 설치하거나 스크립트의 `$iscc` 값을 수정해야 함.
+7. **git** — 저장소가 `https://github.com/shinsh628/newScreen.git`에 있으므로 `git clone`으로 받으면 됨.
+
+옵션(있으면 편함, 없어도 이 프로젝트 자체는 빌드/실행 가능):
+- 관련 프로젝트 `lazerSR`(osu! 쪽, `C:\dev\lazerSR\lazerSRClean`) — 2단계 실시간 주입 기능을 함께
+  테스트하려면 이것도 별도로 필요.
