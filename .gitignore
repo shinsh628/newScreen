@@ -1,0 +1,15 @@
+# Build outputs
+bin/
+obj/
+publish/
+
+# Installer output (large binaries, regenerable via build-installer.ps1)
+installer/Output/
+*/installer/Output/
+
+# NewScreen 캡처 로그 (실행 중 생성되는 산출물, 커밋 대상 아님)
+screenLog/
+
+# VS/Rider
+.vs/
+*.user

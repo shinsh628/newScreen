@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AssemblyName>ScreenEditor</AssemblyName>
+    <RootNamespace>ScreenEditor</RootNamespace>
+    <Version>1.1.0</Version>
+    <Product>ScreenEditor</Product>
+    <Company>ScreenEditor</Company>
+    <Description>리듬게임 화면 구성 편집기</Description>
+  </PropertyGroup>
+
+</Project>

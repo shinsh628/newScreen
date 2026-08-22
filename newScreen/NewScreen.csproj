@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Windows.Graphics.Capture(WGC)를 쓰려면 WinRT 프로젝션이 필요하다.
+         빌드는 22000(Windows 11)으로 한다 — 노란 캡처 테두리를 끄는 IsBorderRequired가 거기서 추가됐다.
+         실행 최소 요구는 19041(Windows 10 2004)로 낮춰 두고, 그 API는 런타임에 try/catch로 감싼다. -->
+    <TargetFramework>net8.0-windows10.0.22000.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>NewScreen</AssemblyName>
+    <RootNamespace>NewScreen</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>NewScreen</Product>
+    <Company>ScreenEditor</Company>
+    <Description>노트 캡처 감지기 최소 테스트</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WGC 프레임은 D3D11 텍스처로 오므로 스테이징 텍스처 복사·Map이 필요하다.
+         전부 관리형 래퍼이고 네이티브 의존은 Windows 자체의 d3d11.dll/dxgi.dll뿐이라 배포에 문제없다. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+  </ItemGroup>
+
+</Project>
