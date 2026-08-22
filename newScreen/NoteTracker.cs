@@ -415,6 +415,10 @@ public sealed class NoteTracker
         // 지나가면서 홀드 하나가 여러 개의 겹치는 이벤트로 쪼개지는 원인이었음). 매칭 이전에 걸러내면
         // 이 간섭 자체가 사라진다.
         // 남은(=얇지 않은) run들 사이의 작은 배경 간격은 하나로 합친다(안티에일리어싱 등으로 생기는 미세한 끊김 방어).
+        // 단, 다수결 색상이 다른 run끼리는 절대 합치지 않는다 — 사이드노트와 일반노트는 실제로 배경 간격
+        // 없이(또는 몇 px만 두고) 붙어 나올 수 있는데, 색상 구분 없이 간격만 보고 합치면 좁은 쪽 노트가
+        // 통째로 다수결에 묻혀 사라지고 남은 쪽 길이도 둘을 합친 값으로 잘못 계산된다(실기 로그로 확인:
+        // 같은 색끼리 이 임계값 이내로 붙는 경우는 없었고, 예외는 항상 SIDE-NORMAL 경계였음).
         var runs = new List<(int, int, int, int)>();
         foreach (var r in raw)
         {
@@ -423,7 +427,8 @@ public sealed class NoteTracker
             if (runs.Count > 0)
             {
                 var last = runs[^1];
-                if (r.Start - last.Item2 - 1 <= MaxRunMergeGapPx)
+                bool sameColor = (last.Item4 > last.Item3) == (r.SideCount > r.NormalCount);
+                if (sameColor && r.Start - last.Item2 - 1 <= MaxRunMergeGapPx)
                 {
                     runs[^1] = (last.Item1, r.End, last.Item3 + r.NormalCount, last.Item4 + r.SideCount);
                     continue;
