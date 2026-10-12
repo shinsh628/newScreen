@@ -63,8 +63,12 @@ public sealed class NoteTracker
     /// </summary>
     public const int MaxRunMergeGapPx = 5;
 
-    /// <summary>이 값(px) 이상이면 롱노트. 단노트 크기가 환경마다 들쭉날쭉할 수 있으니 여유롭게 잡음.</summary>
-    public const int LongNoteMinHeightPx = 90;
+    /// <summary>
+    /// 이 값(px) 이상이면 롱노트. 단노트 크기가 환경마다 들쭉날쭉할 수 있으니 여유롭게 잡음.
+    /// 90이었을 때 실기 로그(2026-08-23)에서 단노트가 97.8px로 잡혀 롱노트로 오판된 사례가 있었다.
+    /// 같은 로그에서 단노트는 최대 ~98px, 진짜 롱노트는 최소 151px이라 그 사이로 올렸다.
+    /// </summary>
+    public const int LongNoteMinHeightPx = 130;
 
     /// <summary>
     /// 아직 속도를 못 잰(샘플 1개짜리) 트랙의 다음 틱 예측에 쓰는 가정 속도(px/ms).
@@ -143,13 +147,14 @@ public sealed class NoteTracker
     }
 
     readonly int _stripHeight;
-    readonly int _judgementLineY;
+    readonly int _judgementDistancePx;
     readonly double _overrideVelocity;
     readonly List<Track> _active = new();
 
-    /// <param name="judgementLineY">
-    /// 캡처 띠 최상단(y=0)에서 판정선까지의 거리(px). 클라이언트 좌표계에서 띠가 y=0부터 시작하므로
-    /// 판정선의 y좌표가 곧 이 거리다.
+    /// <param name="judgementDistancePx">
+    /// 캡처 띠 최상단(띠 안의 y=0)에서 판정선까지의 거리(px) = 판정선 y − 띠 시작 y (둘 다 클라이언트 좌표).
+    /// 띠가 창 최상단에 고정돼 있던 1.2.0까지는 판정선 y좌표가 곧 이 거리여서 <c>judgementLineY</c>라는
+    /// 이름이었다. 띠 위치를 옮길 수 있게 되면서 값의 의미가 달라졌으므로 이름도 바꿨다.
     /// </param>
     /// <param name="overrideVelocity">
     /// 0보다 크면 노트별 실측 속도 대신 이 값을 쓴다(캘리브레이션으로 구한 전역 속도).
@@ -168,10 +173,10 @@ public sealed class NoteTracker
     /// <summary>길이 미정으로 내보냈던 롱노트의 실제 길이가 확정됐을 때 발생.</summary>
     public event Action<NoteLength>? NoteLengthKnown;
 
-    public NoteTracker(int stripHeight, int judgementLineY, double overrideVelocity = 0, int lane = 0)
+    public NoteTracker(int stripHeight, int judgementDistancePx, double overrideVelocity = 0, int lane = 0)
     {
         _stripHeight = stripHeight;
-        _judgementLineY = judgementLineY;
+        _judgementDistancePx = judgementDistancePx;
         _overrideVelocity = overrideVelocity;
         _lane = lane;
     }
@@ -206,7 +211,7 @@ public sealed class NoteTracker
         if (!t.Emitted)
         {
             bool isSide = t.SideVotes > t.NormalVotes;
-            long hitMs = (long)Math.Round(t.T0 + _judgementLineY / v);
+            long hitMs = (long)Math.Round(t.T0 + _judgementDistancePx / v);
 
             if (topEntered)
             {
@@ -384,7 +389,7 @@ public sealed class NoteTracker
         // t0는 leading edge가 캡처 띠 최상단(y=0)을 지난 시각이다. 거기서 판정선까지 더 내려가는
         // 시간을 더해 "판정선에 닿는 시각"으로 옮긴다 — 이것이 osu! HitObject.StartTime과 같은 기준이다.
         // 속도를 못 잰 트랙(v<=0)은 역산이 불가능하므로 t0를 그대로 둔다.
-        long hitMs = v > 0 ? (long)Math.Round(t0 + _judgementLineY / v) : t0;
+        long hitMs = v > 0 ? (long)Math.Round(t0 + _judgementDistancePx / v) : t0;
 
         bool isSide = t.SideVotes > t.NormalVotes;
         string kind = isSide ? "SIDE" : (lengthPx >= LongNoteMinHeightPx ? "HOLD" : "TAP");

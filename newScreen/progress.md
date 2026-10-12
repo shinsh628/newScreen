@@ -210,6 +210,17 @@ osu!의 `HitObject.StartTime`이 곧 "판정선에서 쳐야 하는 시각"이�
 
 # 배포 이력
 
+## 1.3.0 (2026-10-12)
+- **롱노트 기준 90 → 130px** (`NoteTracker.LongNoteMinHeightPx`): 실기 로그(2026-08-23)에서 단노트가 97.8px로
+  잡혀 롱노트로 오판된 사례가 있었다. 같은 로그의 단노트는 최대 ~98px, 진짜 롱노트는 최소 151px.
+- **캡처 띠 위치·길이 지정**: 칼럼 위치 설정에서 판정선 다음에 띠 위쪽 끝 → 아래쪽 끝을 클릭한다
+  (`Settings.ClientStripTopY`/`StripHeightPx`, 기본 0/400 = 1.2.0까지의 고정 동작). 띠는 판정선보다 위,
+  길이 `NoteDetector.MinStripHeight`(250px) 이상, 대상 창 안이어야 한다(저장 시·캡처 시작 시 검사).
+  - 판정 시각 역산의 거리는 이제 `판정선 y − 띠 시작 y`다. 의미가 바뀌어 트래커 인자 이름도
+    `judgementLineY` → `judgementDistancePx`로 바꿨다.
+  - 띠를 내릴수록 리드타임(≈ 그 거리 / 속도)이 줄어든다. 띠를 옮긴 뒤에는 캘리브레이션을 다시 한다.
+- 산출물: `installer\Output\NewScreen-Setup-1.3.0.exe`. GitHub Releases `v1.3.0`에도 첨부.
+
 ## 1.2.0 (2026-08-23)
 - **osz 자동 생성 기능 추가**: 캡처 종료 시 대상 창(프로세스) 오디오를 WASAPI 프로세스 루프백으로
   녹음해서 events.log와 합쳐 osu! mania 6키 `.osz`를 자동으로 만든다(체크박스 옵션, 기본 꺼짐).

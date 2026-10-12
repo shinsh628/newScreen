@@ -56,6 +56,18 @@ public class Settings
 
     public bool JudgementLineSet => ClientJudgementLineY >= 0;
 
+    /// <summary>
+    /// 캡처 띠 위쪽 끝의 y좌표 — <b>대상 창의 클라이언트 좌표</b>. 칼럼 설정에서 판정선 다음에 찍는다.
+    /// <para>
+    /// 기본값 0(창 최상단) + <see cref="StripHeightPx"/> 400은 1.2.0까지의 고정 동작과 같다 — 띠를 따로
+    /// 지정한 적 없는 기존 설정 파일은 예전과 똑같이 동작한다.
+    /// </para>
+    /// </summary>
+    public int ClientStripTopY { get; set; } = 0;
+
+    /// <summary>캡처 띠 길이(px). 칼럼 설정에서 띠 아래쪽 끝을 찍어 정한다.</summary>
+    public int StripHeightPx { get; set; } = NoteDetector.DefaultStripHeight;
+
     /// <summary>캡처를 시작할 수 있는 상태인지 — 대상 창 + 레인 4개 + 판정선이 모두 있어야 한다.</summary>
     public bool CaptureReady => TargetWindowSet && AllColumnsSet && JudgementLineSet;
 

@@ -18,9 +18,18 @@ public sealed class NoteDetector : IDisposable
 {
     public const int LaneCount = Settings.LaneCount;
 
-    // 캡처 띠 크기 (고정값, 나중에 설정 가능하게 뺄 수 있음)
+    // 캡처 띠 폭 (고정값). 띠의 시작 y와 길이는 칼럼 설정에서 정한다(Settings).
     public const int StripWidth = 6;
-    public const int StripHeight = 400;
+
+    /// <summary>띠 길이 기본값 — 1.2.0까지의 고정값. 띠를 지정한 적 없는 설정 파일은 이 값으로 동작한다.</summary>
+    public const int DefaultStripHeight = 400;
+
+    /// <summary>
+    /// 띠 길이 하한. 100ms 틱이면 노트가 한 틱에 ~100px 움직이므로, 띠가 짧으면 노트가 두 번 찍히기도 전에
+    /// 지나가 버려 속도 측정·추적이 깨진다. 롱노트 기준(<see cref="NoteTracker.LongNoteMinHeightPx"/>)보다도
+    /// 충분히 길어야 끝 미정 롱노트를 일찍 내보낼 수 있다.
+    /// </summary>
+    public const int MinStripHeight = 250;
 
     // "검정이 아니다" 판정 기준 밝기 (0~255). 배경(검정)보다 확실히 밝은 값이면 통과.
     // 배경이 거의 순수 검정이라 여유를 낮게 잡아도 안전하고, 문턱값을 낮출수록 흐릿한/반투명한
@@ -41,6 +50,8 @@ public sealed class NoteDetector : IDisposable
 
     readonly int[] _columnXs;
     readonly int _judgementLineY;
+    readonly int _stripTopY;
+    readonly int _stripHeight;
     readonly IntPtr _targetHwnd;
     readonly bool _calibrationOnly;
     readonly double _calibratedVelocity;
@@ -73,6 +84,8 @@ public sealed class NoteDetector : IDisposable
     /// <param name="targetHwnd">캡처할 게임 창.</param>
     /// <param name="columnXs">레인 4개의 캡처 띠 중심 x좌표 — <b>대상 창의 클라이언트 좌표</b>.</param>
     /// <param name="judgementLineY">판정선의 y좌표 — <b>대상 창의 클라이언트 좌표</b>.</param>
+    /// <param name="stripTopY">캡처 띠 위쪽 끝의 y좌표 — <b>대상 창의 클라이언트 좌표</b>.</param>
+    /// <param name="stripHeight">캡처 띠 길이(px).</param>
     /// <param name="calibratedVelocity">
     /// 캘리브레이션으로 구한 스크롤 속도(px/ms). 0보다 크면 노트별 실측 속도 대신 이 값을 쓴다.
     /// 판정선까지의 거리가 멀어 <b>속도 오차가 그 거리만큼 증폭되므로</b>, 표본이 많은 전역값이 훨씬 정확하다.
@@ -93,7 +106,7 @@ public sealed class NoteDetector : IDisposable
     /// true면 감지 자체는 그대로 하되(사이드도 평소처럼 인식), osz를 만들 때만 SIDE 이벤트를 빼고
     /// 4키(CircleSize=4) 맵으로 만든다.
     /// </param>
-    public NoteDetector(IntPtr targetHwnd, int[] columnXs, int judgementLineY,
+    public NoteDetector(IntPtr targetHwnd, int[] columnXs, int judgementLineY, int stripTopY, int stripHeight,
                         double calibratedVelocity = 0, bool calibrationOnly = false, NoteSender? sender = null,
                         bool generateOsz = false, bool excludeSideNotes = false)
     {
@@ -101,6 +114,8 @@ public sealed class NoteDetector : IDisposable
         _targetHwnd = targetHwnd;
         _columnXs = columnXs;
         _judgementLineY = judgementLineY;
+        _stripTopY = stripTopY;
+        _stripHeight = stripHeight;
         _calibratedVelocity = calibratedVelocity;
         _calibrationOnly = calibrationOnly;
         _sender = calibrationOnly ? null : sender;
@@ -171,21 +186,29 @@ public sealed class NoteDetector : IDisposable
         var laneXOffsets = new int[LaneCount];
         for (int i = 0; i < LaneCount; i++) laneXOffsets[i] = (_columnXs[i] - StripWidth / 2) - captureLeft;
 
+        // 띠가 창 클라이언트 영역을 벗어나면 캡처 프레임 밖을 복사하게 되는데, 이때 D3D11은 에러 없이
+        // 복사를 건너뛸 수 있어 "노트가 하나도 안 잡힌다"로만 나타난다 — 시작 전에 명시적으로 막는다.
+        // (칼럼을 찍은 뒤 창 크기가 바뀐 경우가 여기 걸린다.)
+        if (Native.GetClientRect(_targetHwnd, out var client) &&
+            (_stripTopY < 0 || _stripTopY + _stripHeight > client.Bottom - client.Top))
+            throw new InvalidOperationException(
+                $"캡처 띠(y={_stripTopY}~{_stripTopY + _stripHeight})가 대상 창 영역(높이 {client.Bottom - client.Top})을 벗어납니다. 칼럼 위치를 다시 설정하세요.");
+
         // 좌표는 대상 창의 클라이언트 기준이다. y=0은 화면 최상단이 아니라 창 클라이언트 영역의 최상단.
-        using var capture = new WindowCapture(_targetHwnd, captureLeft, 0, captureWidth, StripHeight);
+        using var capture = new WindowCapture(_targetHwnd, captureLeft, _stripTopY, captureWidth, _stripHeight);
 
         using var rawLog = _calibrationOnly ? null : new StreamWriter(RawLogFilePath!, append: false) { AutoFlush = false };
         using var evLog = _calibrationOnly ? null : new StreamWriter(EventsLogFilePath!, append: false) { AutoFlush = false };
 
         string meta = $"clientColumns={string.Join(",", _columnXs)} judgementLineY={_judgementLineY} " +
-                      $"stripWidth={StripWidth} stripHeight={StripHeight} " +
+                      $"stripWidth={StripWidth} stripTopY={_stripTopY} stripHeight={_stripHeight} " +
                       $"capture=WGC clientOffset={capture.ClientOffsetX},{capture.ClientOffsetY} borderHidden={capture.BorderHidden} " +
                       $"tickIntervalMs={TickInterval.TotalMilliseconds:F0} " +
                       $"threshold={BrightnessThreshold} redDominanceMargin={RedDominanceMargin} " +
                       $"measureLineMaxWidthPx={NoteTracker.MeasureLineMaxWidthPx} " +
                       $"longNoteMinHeightPx={NoteTracker.LongNoteMinHeightPx} start={startTime:O}";
         rawLog?.WriteLine($"# {meta}");
-        rawLog?.WriteLine("# elapsedMs\tlane0\tlane1\tlane2\tlane3 (0=배경,1=흰/파랑,2=빨강, index0=y0=화면맨위, 4레인 한 번에 동시 캡처됨)");
+        rawLog?.WriteLine("# elapsedMs\tlane0\tlane1\tlane2\tlane3 (0=배경,1=흰/파랑,2=빨강, index0=띠 맨위=클라이언트 y=stripTopY, 4레인 한 번에 동시 캡처됨)");
         evLog?.WriteLine($"# {meta}");
         evLog?.WriteLine("# lane\thitMs\tvelocity_px_per_ms\tlengthPx\tkind(TAP/HOLD/SIDE)");
         evLog?.WriteLine("# hitMs = 노트가 판정선에 닿는 시각(= osu! HitObject.StartTime과 같은 기준). 등장 시각이 아님.");
@@ -197,7 +220,8 @@ public sealed class NoteDetector : IDisposable
         var trackers = new NoteTracker[LaneCount];
         for (int i = 0; i < LaneCount; i++)
         {
-            trackers[i] = new NoteTracker(StripHeight, _judgementLineY, overrideVelocity, lane: i);
+            // 트래커는 띠 안의 좌표(띠 맨위 = 0)로 계산하므로, 판정선도 띠 맨위로부터의 거리로 넘긴다.
+            trackers[i] = new NoteTracker(_stripHeight, _judgementLineY - _stripTopY, overrideVelocity, lane: i);
 
             if (_sender == null) continue;
 
@@ -227,7 +251,7 @@ public sealed class NoteDetector : IDisposable
         long nextTickTicks = 0;
         var lastState = new bool[LaneCount];
         var rowStates = new RowState[LaneCount][];
-        for (int i = 0; i < LaneCount; i++) rowStates[i] = new RowState[StripHeight];
+        for (int i = 0; i < LaneCount; i++) rowStates[i] = new RowState[_stripHeight];
         var lineBuf = new StringBuilder();
         int linesSinceFlush = 0;
 
@@ -242,7 +266,7 @@ public sealed class NoteDetector : IDisposable
                 elapsedMs = (long)Math.Round(frameTimeMs);
 
                 for (int lane = 0; lane < LaneCount; lane++)
-                    ScanRows(scan0, stride, StripHeight, laneXOffsets[lane], StripWidth, rowStates[lane]);
+                    ScanRows(scan0, stride, _stripHeight, laneXOffsets[lane], StripWidth, rowStates[lane]);
             });
 
             // 아직 프레임이 없으면(캡처 시작 직후 등) 이번 틱은 건너뛴다.

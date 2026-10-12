@@ -2,7 +2,7 @@
 ; 컴파일: installer\build-installer.ps1 (publish 먼저 필요)
 
 #define MyAppName "NewScreen"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "ScreenEditor"
 #define MyAppExeName "NewScreen.exe"
 

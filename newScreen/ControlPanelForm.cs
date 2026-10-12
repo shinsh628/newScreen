@@ -240,6 +240,8 @@ public class ControlPanelForm : Form
         {
             _settings.ClientColumnXs = new int[Settings.LaneCount] { -1, -1, -1, -1 };
             _settings.ClientJudgementLineY = -1;
+            _settings.ClientStripTopY = 0;
+            _settings.StripHeightPx = NoteDetector.DefaultStripHeight;
         }
 
         _settings.Save();
@@ -297,8 +299,24 @@ public class ControlPanelForm : Form
         var j = new Native.POINT { X = 0, Y = picker.SelectedJudgementY };
         Native.ScreenToClient(target, ref j);
 
+        var stripTop = new Native.POINT { X = 0, Y = picker.SelectedStripTopY };
+        Native.ScreenToClient(target, ref stripTop);
+        int stripHeight = picker.SelectedStripBottomY - picker.SelectedStripTopY;
+
+        // 띠가 대상 창 밖으로 나가면 캡처가 조용히 실패하므로 저장 전에 막는다.
+        if (Native.GetClientRect(target, out var client) &&
+            (stripTop.Y < 0 || stripTop.Y + stripHeight > client.Bottom - client.Top))
+        {
+            MessageBox.Show(this,
+                $"캡처 띠(y={stripTop.Y}~{stripTop.Y + stripHeight})가 대상 창 영역(높이 {client.Bottom - client.Top}) 밖에 있습니다. 다시 설정하세요.",
+                "NewScreen");
+            return;
+        }
+
         _settings.ClientColumnXs = xs;
         _settings.ClientJudgementLineY = j.Y;
+        _settings.ClientStripTopY = stripTop.Y;
+        _settings.StripHeightPx = stripHeight;
         _settings.Save();
         UpdateColumnLabel();
         UpdateLabels();
@@ -313,7 +331,8 @@ public class ControlPanelForm : Form
         }
 
         string line = _settings.JudgementLineSet ? $" / 판정선 y={_settings.ClientJudgementLineY}" : " / 판정선 미설정";
-        _lblColumn.Text = $"칼럼: {string.Join(", ", _settings.ClientColumnXs)}{line}";
+        string strip = $" / 띠 y={_settings.ClientStripTopY}~{_settings.ClientStripTopY + _settings.StripHeightPx}";
+        _lblColumn.Text = $"칼럼: {string.Join(", ", _settings.ClientColumnXs)}{line}{strip}";
     }
 
     // ---- 속도 캘리브레이션 ----
@@ -353,7 +372,9 @@ public class ControlPanelForm : Form
 
         // 판정선은 이 모드에서 쓰이지 않고(속도만 잰다), 보정 속도도 넘기지 않는다 —
         // 넘기면 측정 대상이 자기 자신이 되어 버린다.
-        _detector = new NoteDetector(target, _settings.ClientColumnXs, 0, calibratedVelocity: 0, calibrationOnly: true);
+        _detector = new NoteDetector(target, _settings.ClientColumnXs, 0,
+                                     _settings.ClientStripTopY, _settings.StripHeightPx,
+                                     calibratedVelocity: 0, calibrationOnly: true);
         _detector.LaneStateChanged += OnLaneStateChanged;
         _detector.Failed += OnCaptureFailed;
         _detector.VelocityMeasured += OnVelocityMeasured;
@@ -495,6 +516,7 @@ public class ControlPanelForm : Form
         }
 
         _detector = new NoteDetector(target, _settings.ClientColumnXs, _settings.ClientJudgementLineY,
+                                     _settings.ClientStripTopY, _settings.StripHeightPx,
                                      _settings.CalibratedVelocityPxPerMs, sender: _sender,
                                      generateOsz: _settings.GenerateOsz,
                                      excludeSideNotes: _settings.ExcludeSideNotesFromOsz);
